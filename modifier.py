@@ -52,6 +52,18 @@ def apply_all_modifiers(obj: bpy.types.Object) -> None:
 def apply_modifiers_with_shapekeys(obj: bpy.types.Object) -> None:
     reset_shapekey_value(obj)
 
+    # Weldモディファイアの情報を収集
+    weld_jobs = []
+    for m in obj.modifiers:
+        if m.type == "WELD" and m.show_viewport:
+            weld_jobs.append(
+                {
+                    "dist": m.merge_threshold,
+                    "vgroup": m.vertex_group,
+                },
+            )
+            m.show_viewport = False
+
     # Temp object that will contain all collapsed shapekeys
     temp_obj = copy_object(obj)
 
@@ -81,6 +93,30 @@ def apply_modifiers_with_shapekeys(obj: bpy.types.Object) -> None:
 
     # Delete temp object
     remove_object(temp_obj)
+
+    if weld_jobs:
+        execute_manual_weld(obj, weld_jobs)
+
+
+def execute_manual_weld(obj: bpy.types.Object, weld_jobs: list) -> None:
+    bpy.context.view_layer.objects.active = obj
+    bpy.ops.object.mode_set(mode="EDIT")
+
+    for job in weld_jobs:
+        bpy.ops.mesh.select_all(action="DESELECT")
+
+        if job["vgroup"] and job["vgroup"] in obj.vertex_groups:
+            # 頂点グループが指定されている場合、その頂点のみを選択
+            bpy.ops.object.vertex_group_set_active(group=job["vgroup"])
+            bpy.ops.object.vertex_group_select()
+        else:
+            # 指定がなければ全選択
+            bpy.ops.mesh.select_all(action="SELECT")
+
+        # 距離でマージを実行
+        bpy.ops.mesh.remove_doubles(threshold=job["dist"])
+
+    bpy.ops.object.mode_set(mode="OBJECT")
 
 
 def main_apply_modifiers(obj: bpy.types.Object) -> None:
