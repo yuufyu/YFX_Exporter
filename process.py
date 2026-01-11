@@ -1,4 +1,6 @@
 import argparse
+import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -11,7 +13,12 @@ from yfx_exporter.exporter import ExportError, export
 
 def run_export_process(context: bpy.types.Context) -> None:
     scn = context.scene
-    settings = scn.yfx_exporter_settings
+    # settings = scn.yfx_exporter_settings
+    settings = load_export_settings(context)
+
+    export_path = settings["export_path"]
+    if not os.path.isabs(export_path):
+        raise ExportError("The path must be absolute.")
 
     export(context, settings)
 
@@ -60,6 +67,21 @@ def start_background_export(context: bpy.types.Context) -> None:
                 raise ExportError(msg_stderr)
 
 
+def load_export_settings(context: bpy.types.Context) -> dict:
+    scn = context.scene
+    settings_file = scn.yfx_exporter_settings.export_settings_file
+    if settings_file is None:
+        raise ExportError("Not founded json file")
+
+    json_string = settings_file.settings_file.as_string()
+
+    try:
+        settings = json.loads(json_string)
+        return settings
+    except json.JSONDecodeError as e:
+        raise ExportError(str(e))
+
+
 if __name__ == "__main__":
     """Entry point when the script is executed directly in sub process"""
 
@@ -70,7 +92,7 @@ if __name__ == "__main__":
     output = args.output
 
     context = bpy.context
-    settings = context.scene.yfx_exporter_settings
-    export_settings = settings.export_settings
-    export_settings.export_path = output
+    # settings = context.scene.yfx_exporter_settings
+    # export_settings = settings.export_settings
+    # export_settings.export_path = output
     run_export_process(context)

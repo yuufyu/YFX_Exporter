@@ -399,7 +399,14 @@ main process will make potentially destructive changes to the current Blender fi
     )
 
 
+class YFX_EXPORTER_PG_export_settings_file(bpy.types.PropertyGroup):
+    settings_file: bpy.props.PointerProperty(type=bpy.types.Text)
+
+
 class YFX_EXPORTER_PG_settings(bpy.types.PropertyGroup):
+    export_settings_file: bpy.props.PointerProperty(
+        type=YFX_EXPORTER_PG_export_settings_file,
+    )
     export_settings: bpy.props.PointerProperty(type=YFX_EXPORTER_PG_export_settings)
 
 

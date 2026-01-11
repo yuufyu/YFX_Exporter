@@ -64,12 +64,17 @@ class YFX_EXPORTER_PT_export_panel(View3dSidePanel, bpy.types.Panel):
         layout = self.layout
         scn = context.scene
         settings = scn.yfx_exporter_settings.export_settings
+        settings_file = scn.yfx_exporter_settings.export_settings_file
 
         row = layout.row()
         col = row.column(align=True)
         row = col.row(align=True)
         row.scale_y = 1.5
         row.operator("yfx_exporter.export_fbx", icon="CUBE")
+
+        row = layout.row(align=True)
+
+        row.prop(settings_file, "settings_file")
 
         row = layout.row(align=True)
         if settings.export_path == "":

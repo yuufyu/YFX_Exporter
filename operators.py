@@ -9,7 +9,7 @@ from .exporter import ExportError
 from .process import start_background_export, start_foreground_export
 from .shapekey import update_active_collection_shapekeys
 from .utils import update_active_setting_items, update_all_setting_items
-from .validator import ErrorCategory, validate
+from .validator import validate
 
 
 def list_actions_move(items: bpy.types.AnyType, index: int, action: str) -> tuple:
@@ -258,12 +258,12 @@ class YFX_EXPORTER_OT_export_fbx(bpy.types.Operator):
         update_all_setting_items(context)
 
         exist_error = False
-        results = validate(context)
-        if len(results) > 0:
-            for res in results:
-                if res.category == ErrorCategory.ERROR:
-                    exist_error = True
-                self.report({res.category.value}, res.message)
+        # results = validate(context)
+        # if len(results) > 0:
+        #     for res in results:
+        #         if res.category == ErrorCategory.ERROR:
+        #             exist_error = True
+        #         self.report({res.category.value}, res.message)
 
         if not exist_error:
             try:

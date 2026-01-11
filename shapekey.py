@@ -82,6 +82,88 @@ def separate_shapekey_lr(
                     obj.shape_key_remove(key_blocks[idx])
 
 
+def process_shape_key_blending(obj, blend_settings):
+    """JSONの設定に基づきシェイプキーを合成する"""
+    if not obj.data.shape_keys:
+        return
+
+    # 1. すべての既存シェイプキーの値を一度 0 にリセット
+    for key in obj.data.shape_keys.key_blocks:
+        key.value = 0.0
+
+    # 2. 合成設定を一つずつループ (例: "smile", "wink_L")
+    for blend_info in blend_settings:
+        new_name = blend_info["name"]
+
+        if "sources" not in blend_info:
+            continue
+
+        sources = blend_info.get("sources", [])
+
+        # 各ソース（合成元）の値を設定
+        for src in sources:
+            src_name = src["name"]
+            weight = src.get("weight", 1.0)
+            side = src.get("side", "BOTH")
+
+            key_block = obj.data.shape_keys.key_blocks.get(src_name)
+            if not key_block:
+                print(f"警告: シェイプキー {src_name} が見つかりません。")
+                continue
+
+            # 重みを設定
+            key_block.value = weight
+
+            # 左右分離の処理
+            if side in ["LEFT", "RIGHT"]:
+                temp_vg_name = create_temp_side_vertex_group(obj, side)
+                key_block.vertex_group = temp_vg_name
+
+        # 3. 現在の混合状態から新しいシェイプキーを作成
+        if obj.data.shape_keys.key_blocks.find(new_name) >= 0:
+            # すでに存在するシェイプキーに対する処理は要検討
+            pass
+        else:
+            obj.shape_key_add(name=new_name, from_mix=True)
+
+        # 4. 次の合成のためにリセット
+        for src in sources:
+            kb = obj.data.shape_keys.key_blocks.get(src["name"])
+            if kb:
+                kb.value = 0.0
+                kb.vertex_group = ""  # 頂点グループ設定を解除
+
+    # 一時的な頂点グループ（左右判定用）を削除
+    cleanup_temp_vertex_groups(obj)
+
+
+def create_temp_side_vertex_group(obj, side, eps=0.0000001):
+    """原点からの座標に基づき、左右どちらかのみに影響する一時的な頂点グループを作成"""
+    vg_name = f"TEMP_{side}"
+    if vg_name in obj.vertex_groups:
+        return vg_name
+
+    vg = obj.vertex_groups.new(name=vg_name)
+
+    # 全頂点をループして、座標に応じてウェイトを割り当て
+    # LEFT: X > 0, RIGHT: X < 0 (Blenderの標準的な左右)
+    for v in obj.data.vertices:
+        if (side == "LEFT" and v.co.x > eps) or (side == "RIGHT" and v.co.x < -eps):
+            vg.add([v.index], 1.0, "REPLACE")
+        elif (side == "LEFT" or side == "RIGHT") and -eps <= v.co.x <= eps:
+            vg.add([v.index], 0.5, "REPLACE")
+
+    return vg_name
+
+
+def cleanup_temp_vertex_groups(obj):
+    """一時的な頂点グループを削除"""
+    for side in ["LEFT", "RIGHT"]:
+        vg = obj.vertex_groups.get(f"TEMP_{side}")
+        if vg:
+            obj.vertex_groups.remove(vg)
+
+
 def sort_shapekey(obj: bpy.types.Object, shapekey_settings: bpy.types.AnyType) -> None:
     shapekeys = obj.data.shape_keys
     if shapekeys is None or len(shapekeys.key_blocks) <= 1:
@@ -89,8 +171,8 @@ def sort_shapekey(obj: bpy.types.Object, shapekey_settings: bpy.types.AnyType) -
 
     stash_active_index = obj.active_shape_key_index
     key_blocks = shapekeys.key_blocks
-    for shapekey_setting in shapekey_settings.shapekeys:
-        idx = key_blocks.find(shapekey_setting.name)
+    for s in shapekey_settings:
+        idx = key_blocks.find(s["name"])
         if idx < 0:
             continue
         obj.active_shape_key_index = idx

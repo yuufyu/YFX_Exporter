@@ -1,11 +1,11 @@
-from typing import Generator
+from collections.abc import Generator
 
 import bpy
 import bpy_types
 
 from .merge import merge_objects
 from .modifier import main_apply_modifiers
-from .shapekey import separate_shapekey_lr, sort_shapekey
+from .shapekey import process_shape_key_blending, sort_shapekey
 
 
 class ExportError(Exception):
@@ -76,8 +76,7 @@ def delete_unused_vertex_group(obj: bpy.types.Object) -> None:
         for vertex_group_element in vertex.groups:
             group_index = vertex_group_element.group
             weight = vertex_group_element.weight
-            if max_weights[group_index] < weight:
-                max_weights[group_index] = weight
+            max_weights[group_index] = max(max_weights[group_index], weight)
 
     # Deform vertex groups
     deform_bone_names = []
@@ -91,43 +90,42 @@ def delete_unused_vertex_group(obj: bpy.types.Object) -> None:
             obj.vertex_groups.remove(obj.vertex_groups[index])
 
 
-def export(context: bpy_types.Context, settings: bpy.types.AnyType) -> None:
+def export(context: bpy_types.Context, settings: dict) -> None:
     """Preprocess and Export file"""
-    scn = context.scene
-    export_settings = settings.export_settings
-    collection_settings = export_settings.collections
+
+    exporter_settings = context.scene.yfx_exporter_settings
+    export_settings = exporter_settings.export_settings
+
+    export_path = settings["export_path"]
 
     # Convert object to mesh and Apply modifiers
     apply_all_objects(context)
 
-    # Merge objects
-    collection_settings_dict = {c.collection_ptr.name: c for c in collection_settings}
+    for col_info in settings["collections"]:
+        col_name = col_info["name"]
+        col = bpy.data.collections.get(col_name)
+        if not col:
+            continue
 
-    merge_collections = get_merge_collections(
-        collection_settings_dict,
-        scn.collection,
-    )
-
-    for c in merge_collections:
-        merge_objects(context, c.collection_ptr)
-
+        merge_objects(context, col)
         obj = context.view_layer.objects.active
 
         # Post merge process
-        if c.transform_settings.apply_all_transform:
-            bpy.ops.object.transform_apply(
-                location=True,
-                rotation=True,
-                scale=True,
-                properties=False,
-            )
+        bpy.ops.object.transform_apply(
+            location=True,
+            rotation=True,
+            scale=True,
+            properties=False,
+        )
 
-        sort_shapekey(obj, c.shapekey_settings)
+        if "shape_keys" in col_info:
+            shape_keys = col_info["shape_keys"]
 
-        separate_shapekey_lr(obj, c.shapekey_settings)
+            # ここでシェイプキーの合成をする
+            process_shape_key_blending(obj, shape_keys)
+            sort_shapekey(obj, shape_keys)
 
-        if c.vertex_group_settings.delete_vertex_group:
-            delete_unused_vertex_group(obj)
+        delete_unused_vertex_group(obj)
 
     # Export to fbx
     fbx_export_settings = export_settings.fbx_export_settings
@@ -136,6 +134,6 @@ def export(context: bpy_types.Context, settings: bpy.types.AnyType) -> None:
         for key in fbx_export_settings.__annotations__
     }
     bpy.ops.export_scene.fbx(
-        filepath=export_settings.export_path,
+        filepath=export_path,
         **keyargs_dict,
     )
