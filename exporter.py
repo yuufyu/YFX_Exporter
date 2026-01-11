@@ -5,7 +5,11 @@ import bpy_types
 
 from .merge import merge_objects
 from .modifier import main_apply_modifiers
-from .shapekey import process_shape_key_blending, sort_shapekey
+from .shapekey import (
+    process_shape_key_blending,
+    remove_unlisted_shapekeys,
+    sort_shapekey,
+)
 
 
 class ExportError(Exception):
@@ -124,6 +128,7 @@ def export(context: bpy_types.Context, settings: dict) -> None:
             # ここでシェイプキーの合成をする
             process_shape_key_blending(obj, shape_keys)
             sort_shapekey(obj, shape_keys)
+            remove_unlisted_shapekeys(obj, shape_keys)
 
         delete_unused_vertex_group(obj)
 

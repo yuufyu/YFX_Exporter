@@ -82,6 +82,40 @@ def separate_shapekey_lr(
                     obj.shape_key_remove(key_blocks[idx])
 
 
+def remove_unlisted_shapekeys(obj: bpy.types.Object, shapekey_settings: list) -> None:
+    """
+    sort_shapekey 実行後、指定リストに含まれない（末尾に送られなかった）
+    シェイプキーをすべて削除する。
+    """
+    shapekeys = obj.data.shape_keys
+    if shapekeys is None:
+        return
+
+    key_blocks = shapekeys.key_blocks
+    total_keys = len(key_blocks)
+
+    # 常に保持すべき 'Basis' を除いた、設定ファイルにある有効なキーの数をカウント
+    # (findで存在確認できたものだけをカウントするのがより安全です)
+    valid_setting_count = 0
+    for s in shapekey_settings:
+        if s["name"] in key_blocks:
+            valid_setting_count += 1
+
+    # 削除すべき数 = (現在の全数) - (設定にある数) - (Basisキー 1つ)
+    # Basis は通常 index 0 に固定されているため、これを飛ばして削除します。
+    num_to_remove = total_keys - valid_setting_count - 1
+
+    if num_to_remove <= 0:
+        return
+
+    # print(f"{num_to_remove} 個の未定義シェイプキーを削除します。")
+
+    # index 1 (Basisの次) から順番に削除
+    # 削除するたびにインデックスが詰まるため、常に index 1 を消し続ければOKです
+    for _ in range(num_to_remove):
+        obj.shape_key_remove(key_blocks[1])
+
+
 def process_shape_key_blending(obj, blend_settings):
     """JSONの設定に基づきシェイプキーを合成する"""
     if not obj.data.shape_keys:
