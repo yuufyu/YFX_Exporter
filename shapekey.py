@@ -125,47 +125,66 @@ def process_shape_key_blending(obj, blend_settings):
     for key in obj.data.shape_keys.key_blocks:
         key.value = 0.0
 
-    # 2. 合成設定を一つずつループ (例: "smile", "wink_L")
+    # 2. 合成設定を一つずつループ
     for blend_info in blend_settings:
         new_name = blend_info["name"]
+        sources = blend_info.get("sources", [])
 
-        if "sources" not in blend_info:
+        if not sources:
             continue
 
-        sources = blend_info.get("sources", [])
+        # --- 追加: ソースの存在チェック ---
+        # 1つでも存在しないキーがあれば、この新規シェイプキー作成をスキップ
+        missing_source = False
+        for src in sources:
+            if src["name"] not in obj.data.shape_keys.key_blocks:
+                print(
+                    f"警告: {src['name']} が存在しないため、{new_name} の作成をスキップします。",
+                )
+                missing_source = True
+                break
+        if missing_source:
+            continue
+        # ------------------------------
 
         # 各ソース（合成元）の値を設定
         for src in sources:
             src_name = src["name"]
             weight = src.get("weight", 1.0)
-            side = src.get("side", "BOTH")
+            raw_side = str(src.get("side", "BOTH")).upper()
+
+            # サイドの判定をファジーに (Lから始まればLEFT, RならRIGHT)
+            if raw_side.startswith("L"):
+                determined_side = "LEFT"
+            elif raw_side.startswith("R"):
+                determined_side = "RIGHT"
+            else:
+                determined_side = "BOTH"
 
             key_block = obj.data.shape_keys.key_blocks.get(src_name)
-            if not key_block:
-                print(f"警告: シェイプキー {src_name} が見つかりません。")
-                continue
 
             # 重みを設定
             key_block.value = weight
 
             # 左右分離の処理
-            if side in ["LEFT", "RIGHT"]:
-                temp_vg_name = create_temp_side_vertex_group(obj, side)
+            if determined_side in ["LEFT", "RIGHT"]:
+                temp_vg_name = create_temp_side_vertex_group(obj, determined_side)
                 key_block.vertex_group = temp_vg_name
 
-        # 3. 現在の混合状態から新しいシェイプキーを作成
-        if obj.data.shape_keys.key_blocks.find(new_name) >= 0:
-            # すでに存在するシェイプキーに対する処理は要検討
-            pass
-        else:
+        # 3. 新しいシェイプキーを作成
+        # すでに同名のキーがある場合は上書きせずスキップ（または必要に応じて削除して作り直し）
+        if obj.data.shape_keys.key_blocks.find(new_name) == -1:
             obj.shape_key_add(name=new_name, from_mix=True)
+            print(f"作成完了: {new_name}")
+        else:
+            print(f"スキップ: {new_name} は既に存在します。")
 
         # 4. 次の合成のためにリセット
         for src in sources:
             kb = obj.data.shape_keys.key_blocks.get(src["name"])
             if kb:
                 kb.value = 0.0
-                kb.vertex_group = ""  # 頂点グループ設定を解除
+                kb.vertex_group = ""
 
     # 一時的な頂点グループ（左右判定用）を削除
     cleanup_temp_vertex_groups(obj)
