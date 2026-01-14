@@ -142,46 +142,46 @@ def validate(context: bpy_types.Context) -> list:
     error_list = []
 
     scn = context.scene
-    export_settings = scn.yfx_exporter_settings.export_settings
-    collection_settings = export_settings.collections
+    # export_settings = scn.yfx_exporter_settings.export_settings
+    # collection_settings = export_settings.collections
 
     # Check file path error
-    if check_fbx_path(export_settings.export_path):
-        err = ErrorInfo(
-            code=2,
-            category=ErrorCategory.ERROR,
-            message="Invalid FBX output path",
-        )
-        error_list.append(err)
+    # if check_fbx_path(export_settings.export_path):
+    #     err = ErrorInfo(
+    #         code=2,
+    #         category=ErrorCategory.ERROR,
+    #         message="Invalid FBX output path",
+    #     )
+    #     error_list.append(err)
 
     # Check nestd collection
-    nested_collections = check_nest_collections(collection_settings, scn.collection)
-    if len(nested_collections) > 0:
-        nested_collections_str = ",".join(nested_collections)
+    # nested_collections = check_nest_collections(collection_settings, scn.collection)
+    # if len(nested_collections) > 0:
+    #     nested_collections_str = ",".join(nested_collections)
 
-        err = ErrorInfo(
-            code=17,
-            category=ErrorCategory.WARNING,
-            message=tip_(
-                "Child collection '%s' settings are ignored as the parent collection is set as the merge target",
-            )
-            % nested_collections_str,
-        )
-        error_list.append(err)
+    #     err = ErrorInfo(
+    #         code=17,
+    #         category=ErrorCategory.WARNING,
+    #         message=tip_(
+    #             "Child collection '%s' settings are ignored as the parent collection is set as the merge target",
+    #         )
+    #         % nested_collections_str,
+    #     )
+    #     error_list.append(err)
 
-    # Check Collections
-    for c in collection_settings:
-        collection = c.collection_ptr
-        if collection and check_inconsistent_armature(collection):
-            err = ErrorInfo(
-                code=7,
-                category=ErrorCategory.WARNING,
-                message=tip_(
-                    "Armature settings for objects in '%s' are not consistent. Some meshes may not follow bones after export",
-                )
-                % collection.name,
-            )
-            error_list.append(err)
+    # # Check Collections
+    # for c in collection_settings:
+    #     collection = c.collection_ptr
+    #     if collection and check_inconsistent_armature(collection):
+    #         err = ErrorInfo(
+    #             code=7,
+    #             category=ErrorCategory.WARNING,
+    #             message=tip_(
+    #                 "Armature settings for objects in '%s' are not consistent. Some meshes may not follow bones after export",
+    #             )
+    #             % collection.name,
+    #         )
+    #         error_list.append(err)
 
     # Check visible meshes
     for obj in scn.objects:

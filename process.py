@@ -12,7 +12,7 @@ from yfx_exporter.exporter import ExportError, export
 
 
 def run_export_process(context: bpy.types.Context) -> None:
-    scn = context.scene
+    # scn = context.scene
     # settings = scn.yfx_exporter_settings
     settings = load_export_settings(context)
 

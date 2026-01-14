@@ -111,19 +111,19 @@ def process_shape_key_blending(obj, blend_settings):
         existing_key_idx = obj.data.shape_keys.key_blocks.find(new_name)
 
         if existing_key_idx == -1:
-            # 新規作成の場合：名前を変更するだけ
+            # 新規作成の場合：現在のミックス状態から新規キーを作成
             _ = obj.shape_key_add(name=new_name, from_mix=True)
         else:
+            # 既存更新の場合：現在のミックス状態から一時的なキーを作成
             target_key = obj.data.shape_keys.key_blocks[existing_key_idx]
             target_key.value = 1.0
 
-            # 現在のミックス状態から一時的なキーを作成
             temp_key = obj.shape_key_add(
                 name="__YFX_temp_blend_result__",
                 from_mix=True,
             )
 
-            # 既存更新の場合：座標データをコピーして一時キーを削除
+            # 座標データをコピーして一時キーを削除
             # 各頂点の相対座標(data[].co)をコピー
             # ※頂点数が一致していることが前提
             for i in range(len(temp_key.data)):
