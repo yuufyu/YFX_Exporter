@@ -1,23 +1,6 @@
 import bpy
 
 
-def insert_shapekey(obj: bpy.types.Object, name: str, index: int) -> bpy.types.ShapeKey:
-    key_blocks_len = len(obj.data.shape_keys.key_blocks)
-    if key_blocks_len <= 1:
-        return None
-
-    shapekey = obj.shape_key_add(name=name, from_mix=False)
-
-    stash_active_index = obj.active_shape_key_index
-    obj.active_shape_key_index = key_blocks_len
-
-    for _ in range(key_blocks_len - index - 1):
-        bpy.ops.object.shape_key_move(type="UP")
-    obj.active_shape_key_index = stash_active_index
-
-    return shapekey
-
-
 def remove_unlisted_shapekeys(obj: bpy.types.Object, shapekey_settings: list) -> None:
     """
     sort_shapekey 実行後、指定リストに含まれない（末尾に送られなかった）
