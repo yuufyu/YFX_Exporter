@@ -1,7 +1,7 @@
+from collections.abc import Generator, Iterable
 from dataclasses import dataclass
 from enum import Enum
 from itertools import groupby
-from typing import Generator, Iterable
 
 import bpy
 import bpy_types

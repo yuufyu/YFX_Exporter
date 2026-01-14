@@ -8,69 +8,6 @@ class YFX_EXPORTER_PG_warning_settings(bpy.types.PropertyGroup):
     check_vertices_with_no_weights: bpy.props.BoolProperty(default=True)
 
 
-# class YFX_EXPORTER_PG_shapekey_settings(bpy.types.PropertyGroup):
-#     name: bpy.props.StringProperty()
-#     separate_shapekey: bpy.props.BoolProperty(
-#         name="Separate Shapekeys L/R",
-#         description="Split Shapekeys Left and Right Centered at the Object's Origin",
-#         default=False,
-#     )
-#     separate_shapekey_left: bpy.props.StringProperty(
-#         name="Left",
-#         description="Name of the shapekey on the left",
-#     )
-#     separate_shapekey_right: bpy.props.StringProperty(
-#         name="Right",
-#         description="Name of the shapekey on the right",
-#     )
-#     delete_shapekey: bpy.props.BoolProperty(
-#         name="Delete Source Shapekey",
-#         description="Deletes the source shapekey used for splitting",
-#         default=False,
-#     )
-
-
-# class YFX_EXPORTER_PG_collection_shapekey_settings(bpy.types.PropertyGroup):
-#     shapekeys: bpy.props.CollectionProperty(
-#         type=YFX_EXPORTER_PG_shapekey_settings,
-#     )
-#     shapekey_index: bpy.props.IntProperty()
-
-
-# class YFX_EXPORTER_PG_transform_settings(bpy.types.PropertyGroup):
-#     apply_all_transform: bpy.props.BoolProperty(
-#         name="Apply All Transform",
-#         description="Apply the object's transformation to its data",
-#         default=False,
-#     )
-
-
-# class YFX_EXPORTER_PG_vertex_group_settings(bpy.types.PropertyGroup):
-#     delete_vertex_group: bpy.props.BoolProperty(
-#         name="Delete Unused Vertex Group",
-#         description="Deletes vertex groups not assigned to deform bones",
-#         default=True,
-#     )
-
-
-# class YFX_EXPORTER_PG_collection_settings(bpy.types.PropertyGroup):
-#     # name: StringProperty() -> Instantiated by default
-#     collection_ptr: bpy.props.PointerProperty(
-#         name="Collection",
-#         type=bpy.types.Collection,
-#     )
-#     transform_settings: bpy.props.PointerProperty(
-#         type=YFX_EXPORTER_PG_transform_settings,
-#     )
-#     shapekey_settings: bpy.props.PointerProperty(
-#         type=YFX_EXPORTER_PG_collection_shapekey_settings,
-#     )
-#     warning_settings: bpy.props.PointerProperty(type=YFX_EXPORTER_PG_warning_settings)
-#     vertex_group_settings: bpy.props.PointerProperty(
-#         type=YFX_EXPORTER_PG_vertex_group_settings,
-#     )
-
-
 @orientation_helper(axis_forward="-Z", axis_up="Y")
 class YFX_EXPORTER_PG_fbx_export_settings(bpy.types.PropertyGroup):
     """@see https://github.com/blender/blender-addons/blob/main/io_scene_fbx/__init__.py"""
@@ -382,8 +319,6 @@ class YFX_EXPORTER_PG_fbx_export_settings(bpy.types.PropertyGroup):
 
 
 class YFX_EXPORTER_PG_export_settings(bpy.types.PropertyGroup):
-    # collections: bpy.props.CollectionProperty(type=YFX_EXPORTER_PG_collection_settings)
-    # collection_index: bpy.props.IntProperty(update=update_active_setting_items)
     fbx_export_settings: bpy.props.PointerProperty(
         type=YFX_EXPORTER_PG_fbx_export_settings,
     )
