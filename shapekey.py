@@ -171,13 +171,32 @@ def process_shape_key_blending(obj, blend_settings):
                 temp_vg_name = create_temp_side_vertex_group(obj, determined_side)
                 key_block.vertex_group = temp_vg_name
 
-        # 3. 新しいシェイプキーを作成
-        # すでに同名のキーがある場合は上書きせずスキップ（または必要に応じて削除して作り直し）
-        if obj.data.shape_keys.key_blocks.find(new_name) == -1:
-            obj.shape_key_add(name=new_name, from_mix=True)
-            print(f"作成完了: {new_name}")
+        # --- 3. 新しいシェイプキーを作成、または既存のキーを更新 ---
+        existing_key_idx = obj.data.shape_keys.key_blocks.find(new_name)
+
+        if existing_key_idx == -1:
+            # 新規作成の場合：名前を変更するだけ
+            _ = obj.shape_key_add(name=new_name, from_mix=True)
         else:
-            print(f"スキップ: {new_name} は既に存在します。")
+            target_key = obj.data.shape_keys.key_blocks[existing_key_idx]
+            target_key.value = 1.0
+
+            # 現在のミックス状態から一時的なキーを作成
+            temp_key = obj.shape_key_add(
+                name="__YFX_temp_blend_result__",
+                from_mix=True,
+            )
+
+            # 既存更新の場合：座標データをコピーして一時キーを削除
+            # 各頂点の相対座標(data[].co)をコピー
+            # ※頂点数が一致していることが前提
+            for i in range(len(temp_key.data)):
+                target_key.data[i].co = temp_key.data[i].co
+
+            # 一時的なキーを削除
+            obj.shape_key_remove(temp_key)
+
+            target_key.value = 0.0
 
         # 4. 次の合成のためにリセット
         for src in sources:
