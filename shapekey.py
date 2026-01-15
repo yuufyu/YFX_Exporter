@@ -1,3 +1,5 @@
+import graphlib
+
 import bpy
 
 
@@ -35,17 +37,50 @@ def remove_unlisted_shapekeys(obj: bpy.types.Object, shapekey_settings: list) ->
         obj.shape_key_remove(key_blocks[1])
 
 
+def sort_blend_settings(blend_settings):
+    """
+    依存関係に基づいて blend_settings をトポロジカルソートする。
+    """
+    # 依存関係を保持する辞書 { 作成するキー: {必要なキーのセット} }
+    # graphlib は「依存されるもの」を先に返すため、
+    # 「このキーを作るには、これらのソースが必要」という定義にする
+    dependencies = {}
+    settings_map = {}
+
+    for info in blend_settings:
+        name = info["name"]
+        settings_map[name] = info
+        sources = {src["name"] for src in info.get("sources", [])}
+        dependencies[name] = sources
+
+    ts = graphlib.TopologicalSorter(dependencies)
+
+    try:
+        # ソート実行
+        sorted_names = list(ts.static_order())
+
+        # blend_settings に含まれていない（既存の）キーも含まれるため、
+        # 今回の設定に含まれるものだけを抽出して並び替える
+        return [settings_map[name] for name in sorted_names if name in settings_map]
+
+    except graphlib.CycleError:
+        # AがBを必要とし、BがAを必要とするような循環参照がある場合
+        raise ValueError("シェイプキーの合成設定に循環参照が見つかりました。")
+
+
 def process_shape_key_blending(obj, blend_settings):
     """JSONの設定に基づきシェイプキーを合成する"""
     if not obj.data.shape_keys:
         return
+
+    sorted_settings = sort_blend_settings(blend_settings)
 
     # 1. すべての既存シェイプキーの値を一度 0 にリセット
     for key in obj.data.shape_keys.key_blocks:
         key.value = 0.0
 
     # 2. 合成設定を一つずつループ
-    for blend_info in blend_settings:
+    for blend_info in sorted_settings:
         new_name = blend_info["name"]
         sources = blend_info.get("sources", [])
 
