@@ -68,6 +68,41 @@ def sort_blend_settings(blend_settings):
         raise ValueError("シェイプキーの合成設定に循環参照が見つかりました。")
 
 
+def create_deform_shape_key(target_obj, name, deform_info):
+    """頂点グループとベクトルに基づいて新しいシェイプキーを生成する"""
+    vg_name = deform_info.get("target_group")
+    vector = deform_info.get("vector", [0.0, 0.0, 0.0])
+
+    if vg_name not in target_obj.vertex_groups:
+        print(f"警告: 頂点グループ {vg_name} が見つかりません。")
+        return
+
+    # ミックス用の新規シェイプキーを追加
+    new_key = target_obj.shape_key_add(name=name, from_mix=False)
+    vg_index = target_obj.vertex_groups[vg_name].index
+
+    # 各頂点に対して移動を計算
+    # target_obj はすでにモディファイア適用済みの想定
+    for i, vert in enumerate(target_obj.data.vertices):
+        weight = 0.0
+        try:
+            # 頂点から該当グループのウェイトを取得
+            for g in vert.groups:
+                if g.group == vg_index:
+                    weight = g.weight
+                    break
+        except:
+            pass
+
+        if weight > 0:
+            # 相対座標をオフセット (vector は [x, y, z])
+            offset = [v * weight for v in vector]
+            # シェイプキーのデータ(data[i].co)は絶対座標
+            new_key.data[i].co[0] += offset[0]
+            new_key.data[i].co[1] += offset[1]
+            new_key.data[i].co[2] += offset[2]
+
+
 def process_shape_key_blending(obj, blend_settings):
     """JSONの設定に基づきシェイプキーを合成する"""
     if not obj.data.shape_keys:
@@ -83,84 +118,86 @@ def process_shape_key_blending(obj, blend_settings):
     for blend_info in sorted_settings:
         new_name = blend_info["name"]
         sources = blend_info.get("sources", [])
+        deform = blend_info.get("deform", None)
 
-        if not sources:
-            continue
+        if sources:
+            # --- 追加: ソースの存在チェック ---
+            # 1つでも存在しないキーがあれば、この新規シェイプキー作成をスキップ
+            missing_source = False
+            for src in sources:
+                if src["name"] not in obj.data.shape_keys.key_blocks:
+                    print(
+                        f"警告: {src['name']} が存在しないため、{new_name} の作成をスキップします。",
+                    )
+                    missing_source = True
+                    break
+            if missing_source:
+                continue
+            # ------------------------------
 
-        # --- 追加: ソースの存在チェック ---
-        # 1つでも存在しないキーがあれば、この新規シェイプキー作成をスキップ
-        missing_source = False
-        for src in sources:
-            if src["name"] not in obj.data.shape_keys.key_blocks:
-                print(
-                    f"警告: {src['name']} が存在しないため、{new_name} の作成をスキップします。",
-                )
-                missing_source = True
-                break
-        if missing_source:
-            continue
-        # ------------------------------
+            # 各ソース（合成元）の値を設定
+            for src in sources:
+                src_name = src["name"]
+                weight = src.get("weight", 1.0)
+                raw_side = str(src.get("side", "BOTH")).upper()
 
-        # 各ソース（合成元）の値を設定
-        for src in sources:
-            src_name = src["name"]
-            weight = src.get("weight", 1.0)
-            raw_side = str(src.get("side", "BOTH")).upper()
+                # サイドの判定をファジーに (Lから始まればLEFT, RならRIGHT)
+                if raw_side.startswith("L"):
+                    determined_side = "LEFT"
+                elif raw_side.startswith("R"):
+                    determined_side = "RIGHT"
+                else:
+                    determined_side = "BOTH"
 
-            # サイドの判定をファジーに (Lから始まればLEFT, RならRIGHT)
-            if raw_side.startswith("L"):
-                determined_side = "LEFT"
-            elif raw_side.startswith("R"):
-                determined_side = "RIGHT"
+                key_block = obj.data.shape_keys.key_blocks.get(src_name)
+
+                # 重みを設定
+                key_block.value = weight
+
+                # 左右分離の処理
+                if determined_side in ["LEFT", "RIGHT"]:
+                    temp_vg_name = create_temp_side_vertex_group(obj, determined_side)
+                    key_block.vertex_group = temp_vg_name
+
+            # --- 3. 新しいシェイプキーを作成、または既存のキーを更新 ---
+            existing_key_idx = obj.data.shape_keys.key_blocks.find(new_name)
+
+            if existing_key_idx == -1:
+                # 新規作成の場合：現在のミックス状態から新規キーを作成
+                _ = obj.shape_key_add(name=new_name, from_mix=True)
             else:
-                determined_side = "BOTH"
+                # 既存更新の場合：現在のミックス状態から一時的なキーを作成
+                target_key = obj.data.shape_keys.key_blocks[existing_key_idx]
+                target_key.value = 1.0
 
-            key_block = obj.data.shape_keys.key_blocks.get(src_name)
+                temp_key = obj.shape_key_add(
+                    name="__YFX_temp_blend_result__",
+                    from_mix=True,
+                )
 
-            # 重みを設定
-            key_block.value = weight
+                # 座標データをコピーして一時キーを削除
+                # 各頂点の相対座標(data[].co)をコピー
+                # ※頂点数が一致していることが前提
+                for i in range(len(temp_key.data)):
+                    target_key.data[i].co = temp_key.data[i].co
 
-            # 左右分離の処理
-            if determined_side in ["LEFT", "RIGHT"]:
-                temp_vg_name = create_temp_side_vertex_group(obj, determined_side)
-                key_block.vertex_group = temp_vg_name
+                # 一時的なキーを削除
+                obj.shape_key_remove(temp_key)
 
-        # --- 3. 新しいシェイプキーを作成、または既存のキーを更新 ---
-        existing_key_idx = obj.data.shape_keys.key_blocks.find(new_name)
+                target_key.value = 0.0
 
-        if existing_key_idx == -1:
-            # 新規作成の場合：現在のミックス状態から新規キーを作成
-            _ = obj.shape_key_add(name=new_name, from_mix=True)
-        else:
-            # 既存更新の場合：現在のミックス状態から一時的なキーを作成
-            target_key = obj.data.shape_keys.key_blocks[existing_key_idx]
-            target_key.value = 1.0
+            # 4. 次の合成のためにリセット
+            for src in sources:
+                kb = obj.data.shape_keys.key_blocks.get(src["name"])
+                if kb:
+                    kb.value = 0.0
+                    kb.vertex_group = ""
 
-            temp_key = obj.shape_key_add(
-                name="__YFX_temp_blend_result__",
-                from_mix=True,
-            )
-
-            # 座標データをコピーして一時キーを削除
-            # 各頂点の相対座標(data[].co)をコピー
-            # ※頂点数が一致していることが前提
-            for i in range(len(temp_key.data)):
-                target_key.data[i].co = temp_key.data[i].co
-
-            # 一時的なキーを削除
-            obj.shape_key_remove(temp_key)
-
-            target_key.value = 0.0
-
-        # 4. 次の合成のためにリセット
-        for src in sources:
-            kb = obj.data.shape_keys.key_blocks.get(src["name"])
-            if kb:
-                kb.value = 0.0
-                kb.vertex_group = ""
+        if deform:
+            create_deform_shape_key(obj, new_name, deform)
 
     # 一時的な頂点グループ（左右判定用）を削除
-    cleanup_temp_vertex_groups(obj)
+    # cleanup_temp_vertex_groups(obj)
 
 
 def create_temp_side_vertex_group(obj, side, eps=0.0000001):
