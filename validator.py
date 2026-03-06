@@ -4,7 +4,7 @@ from enum import Enum
 from itertools import groupby
 
 import bpy
-import bpy_types
+import bpy.types
 from bpy.app.translations import pgettext_tip as tip_
 
 
@@ -138,7 +138,7 @@ def check_geometry_node(obj: bpy.types.Object) -> bool:
     return any(modifier.type == "NODES" for modifier in obj.modifiers)
 
 
-def validate(context: bpy_types.Context) -> list:
+def validate(context: bpy.types.Context) -> list:
     error_list = []
 
     scn = context.scene

@@ -1,7 +1,7 @@
 from collections.abc import Generator
 
 import bpy
-import bpy_types
+import bpy.types
 
 from .merge import merge_objects
 from .modifier import main_apply_modifiers
@@ -35,7 +35,7 @@ def apply_constraints(obj: bpy.types.Object) -> None:
         bpy.ops.constraint.apply(constraint=name)
 
 
-def apply_all_objects(context: bpy_types.Context) -> None:
+def apply_all_objects(context: bpy.types.Context) -> None:
     scn = context.scene
 
     bpy.ops.object.select_all(action="SELECT")
@@ -94,7 +94,7 @@ def delete_unused_vertex_group(obj: bpy.types.Object) -> None:
             obj.vertex_groups.remove(obj.vertex_groups[index])
 
 
-def export(context: bpy_types.Context, settings: dict) -> None:
+def export(context: bpy.types.Context, settings: dict) -> None:
     """Preprocess and Export file"""
 
     exporter_settings = context.scene.yfx_exporter_settings

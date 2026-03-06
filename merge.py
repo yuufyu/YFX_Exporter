@@ -1,5 +1,5 @@
 import bpy
-import bpy_types
+import bpy.types
 
 
 def get_child_objects(collection: bpy.types.Collection) -> list:
@@ -13,7 +13,7 @@ def get_child_objects(collection: bpy.types.Collection) -> list:
     return collections
 
 
-def merge_objects(context: bpy_types.Context, collection: bpy.types.Collection) -> None:
+def merge_objects(context: bpy.types.Context, collection: bpy.types.Collection) -> None:
     merge_targets = get_child_objects(collection)
 
     if len(merge_targets) == 1:

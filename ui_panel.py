@@ -1,14 +1,14 @@
 import bpy
-import bpy_types
+import bpy.types
 
 
 def show_popup_message(
-    context: bpy_types.Context,
+    context: bpy.types.Context,
     message: str = "",
     title: str = "Message Box",
     icon: str = "INFO",
 ) -> None:
-    def draw(self: bpy.types.Panel, context: bpy_types.Context) -> None:
+    def draw(self: bpy.types.Panel, context: bpy.types.Context) -> None:
         self.layout.label(text=message)
 
     context.window_manager.popup_menu(draw, title=title, icon=icon)
@@ -24,7 +24,7 @@ class YFX_EXPORTER_PT_export_panel(View3dSidePanel, bpy.types.Panel):
     bl_label = "YFX Exporter"
     bl_idname = "YFX_EXPORTER_PT_export_panel"
 
-    def draw(self, context: bpy_types.Context) -> None:
+    def draw(self, context: bpy.types.Context) -> None:
         layout = self.layout
         scn = context.scene
         settings_file = scn.yfx_exporter_settings.export_settings_file
@@ -49,7 +49,7 @@ class YFX_EXPORTER_PT_fbx_export_settings_main_panel(View3dSidePanel, bpy.types.
     bl_parent_id = "YFX_EXPORTER_PT_export_panel"
     bl_options = {"DEFAULT_CLOSED"}  # noqa: RUF012
 
-    def draw(self, context: bpy_types.Context) -> None:
+    def draw(self, context: bpy.types.Context) -> None:
         scn = context.scene
         settings = scn.yfx_exporter_settings
         fbx_export_settings = settings.export_settings.fbx_export_settings
@@ -79,7 +79,7 @@ class YFX_EXPORTER_PT_fbx_export_settings_include_panel(
     bl_idname = "YFX_EXPORTER_PT_fbx_export_settings_include_panel"
     bl_parent_id = "YFX_EXPORTER_PT_fbx_export_settings_main_panel"
 
-    def draw(self, context: bpy_types.Context) -> None:
+    def draw(self, context: bpy.types.Context) -> None:
         scn = context.scene
         settings = scn.yfx_exporter_settings
         fbx_export_settings = settings.export_settings.fbx_export_settings
@@ -100,7 +100,7 @@ class YFX_EXPORTER_PT_fbx_export_settings_transform_panel(
     bl_idname = "YFX_EXPORTER_PT_fbx_export_settings_transform_panel"
     bl_parent_id = "YFX_EXPORTER_PT_fbx_export_settings_main_panel"
 
-    def draw(self, context: bpy_types.Context) -> None:
+    def draw(self, context: bpy.types.Context) -> None:
         scn = context.scene
         settings = scn.yfx_exporter_settings
         fbx_export_settings = settings.export_settings.fbx_export_settings
@@ -130,7 +130,7 @@ class YFX_EXPORTER_PT_fbx_export_settings_geometry_panel(
     bl_idname = "YFX_EXPORTER_PT_fbx_export_settings_geometry_panel"
     bl_parent_id = "YFX_EXPORTER_PT_fbx_export_settings_main_panel"
 
-    def draw(self, context: bpy_types.Context) -> None:
+    def draw(self, context: bpy.types.Context) -> None:
         scn = context.scene
         settings = scn.yfx_exporter_settings
         fbx_export_settings = settings.export_settings.fbx_export_settings
@@ -159,7 +159,7 @@ class YFX_EXPORTER_PT_fbx_export_settings_armature_panel(
     bl_idname = "YFX_EXPORTER_PT_fbx_export_settings_armature_panel"
     bl_parent_id = "YFX_EXPORTER_PT_fbx_export_settings_main_panel"
 
-    def draw(self, context: bpy_types.Context) -> None:
+    def draw(self, context: bpy.types.Context) -> None:
         scn = context.scene
         settings = scn.yfx_exporter_settings
         fbx_export_settings = settings.export_settings.fbx_export_settings
@@ -183,14 +183,14 @@ class YFX_EXPORTER_PT_fbx_export_settings_bake_animation_panel(
     bl_idname = "YFX_EXPORTER_PT_fbx_export_settings_bake_animation_panel"
     bl_parent_id = "YFX_EXPORTER_PT_fbx_export_settings_main_panel"
 
-    def draw_header(self, context: bpy_types.Context) -> None:
+    def draw_header(self, context: bpy.types.Context) -> None:
         scn = context.scene
         settings = scn.yfx_exporter_settings
         fbx_export_settings = settings.export_settings.fbx_export_settings
 
         self.layout.prop(fbx_export_settings, "bake_anim", text="")
 
-    def draw(self, context: bpy_types.Context) -> None:
+    def draw(self, context: bpy.types.Context) -> None:
         scn = context.scene
         settings = scn.yfx_exporter_settings
         fbx_export_settings = settings.export_settings.fbx_export_settings
@@ -216,7 +216,7 @@ class YFX_EXPORTER_PT_fbx_export_settings_custom(
     bl_idname = "YFX_EXPORTER_PT_fbx_export_settings_custom"
     bl_parent_id = "YFX_EXPORTER_PT_fbx_export_settings_main_panel"
 
-    def draw(self, context: bpy_types.Context) -> None:
+    def draw(self, context: bpy.types.Context) -> None:
         scn = context.scene
         settings = scn.yfx_exporter_settings
         export_settings = settings.export_settings
