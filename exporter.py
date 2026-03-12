@@ -5,6 +5,7 @@ import bpy.types
 
 from .merge import merge_objects
 from .modifier import main_apply_modifiers
+from .optimizer import remove_unused_bones
 from .shapekey import (
     process_shape_key_blending,
     remove_unlisted_shapekeys,
@@ -131,6 +132,8 @@ def export(context: bpy.types.Context, settings: dict) -> None:
             remove_unlisted_shapekeys(obj, shape_keys)
 
         delete_unused_vertex_group(obj)
+
+    remove_unused_bones(context)
 
     # Export to fbx
     fbx_export_settings = export_settings.fbx_export_settings
