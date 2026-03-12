@@ -73,7 +73,7 @@ def collect_bones_to_delete(
     return to_delete
 
 
-def remove_unused_bones(context: bpy.types.Context) -> None:
+def remove_unused_bones(context: bpy.types.Context, keep_bones: list[str]) -> None:
     # ---- アーマチュアを取得 ----
     armature_obj = None
     for obj in context.scene.objects:
@@ -89,7 +89,7 @@ def remove_unused_bones(context: bpy.types.Context) -> None:
         print("アーマチュアが見つかりません")
         return
 
-    used_bones = get_used_bones(context)
+    used_bones = get_used_bones(context) | set(keep_bones)
 
     # 2. 削除対象の特定
     bones_to_remove = collect_bones_to_delete(armature_obj, used_bones)

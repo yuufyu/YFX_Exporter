@@ -133,7 +133,12 @@ def export(context: bpy.types.Context, settings: dict) -> None:
 
         delete_unused_vertex_group(obj)
 
-    remove_unused_bones(context)
+    if "armature" in settings:
+        armature_info = settings["armature"]
+        delete_unused_bones = armature_info.get("delete_unused_bones", True)
+        if delete_unused_bones:
+            keep_bones = armature_info.get("keep_bones", [])
+            remove_unused_bones(context, keep_bones)
 
     # Export to fbx
     fbx_export_settings = export_settings.fbx_export_settings
