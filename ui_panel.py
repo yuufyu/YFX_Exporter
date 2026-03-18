@@ -27,7 +27,9 @@ class YFX_EXPORTER_PT_export_panel(View3dSidePanel, bpy.types.Panel):
     def draw(self, context: bpy.types.Context) -> None:
         layout = self.layout
         scn = context.scene
-        settings_file = scn.yfx_exporter_settings.export_settings_file
+        settings = scn.yfx_exporter_settings
+        settings_file = settings.export_settings_file
+        export_settings = settings.export_settings
 
         row = layout.row()
         col = row.column(align=True)
@@ -41,6 +43,9 @@ class YFX_EXPORTER_PT_export_panel(View3dSidePanel, bpy.types.Panel):
 
         row = layout.row(align=True)
         row.operator("yfx_exporter.check_model", icon="ERROR")
+
+        row = layout.row(align=True)
+        row.prop(export_settings, "use_check_before_export")
 
 
 class YFX_EXPORTER_PT_fbx_export_settings_main_panel(View3dSidePanel, bpy.types.Panel):

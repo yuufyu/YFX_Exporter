@@ -19,9 +19,16 @@ class YFX_EXPORTER_OT_export_fbx(bpy.types.Operator):
         settings = scn.yfx_exporter_settings
         export_settings = settings.export_settings
 
-        exist_error = False
+        check_results = []
 
-        if not exist_error:
+        if export_settings.use_check_before_export:
+            check_results = validate(context)
+
+        if len(check_results) > 0:
+            for res in check_results:
+                self.report({res.category.value}, res.message)
+            self.report({"ERROR"}, "[Validation Failed]")
+        else:
             try:
                 if export_settings.use_main_process_export:
                     start_foreground_export(context)

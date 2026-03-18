@@ -330,6 +330,11 @@ class YFX_EXPORTER_PG_export_settings(bpy.types.PropertyGroup):
 main process will make potentially destructive changes to the current Blender file",
         default=False,
     )
+    use_check_before_export: bpy.props.BoolProperty(
+        name="Check Model before Export",
+        description="Run model check before starting FBX export",
+        default=False,
+    )
 
 
 class YFX_EXPORTER_PG_export_settings_file(bpy.types.PropertyGroup):
