@@ -36,6 +36,12 @@ def apply_constraints(obj: bpy.types.Object) -> None:
         bpy.ops.constraint.apply(constraint=name)
 
 
+def unlock_objects(context: bpy.types.Context) -> None:
+    for obj in context.scene.objects:
+        if obj.hide_select:
+            obj.hide_select = False
+
+
 def apply_all_objects(context: bpy.types.Context) -> None:
     scn = context.scene
 
@@ -102,6 +108,8 @@ def export(context: bpy.types.Context, settings: dict) -> None:
     export_settings = exporter_settings.export_settings
 
     export_path = settings["export_path"]
+
+    unlock_objects(context)
 
     # Convert object to mesh and Apply modifiers
     apply_all_objects(context)
