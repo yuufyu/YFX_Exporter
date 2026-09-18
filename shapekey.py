@@ -68,164 +68,295 @@ def sort_blend_settings(blend_settings):
         raise ValueError("シェイプキーの合成設定に循環参照が見つかりました。")
 
 
+def _get_or_create_shape_key(obj, name):
+    """ShapeKey を取得し、存在しなければ Basis から新規作成する。"""
+    shape_keys = obj.data.shape_keys
+    if shape_keys is None:
+        # 通常ここには来ないが、単独利用時の安全策。
+        obj.shape_key_add(name="Basis", from_mix=False)
+        shape_keys = obj.data.shape_keys
+
+    key = shape_keys.key_blocks.get(name)
+    if key is None:
+        key = obj.shape_key_add(name=name, from_mix=False)
+    return key
+
+
+def _normalize_side(raw_side):
+    """JSON の side 指定を LEFT / RIGHT / BOTH に正規化する。"""
+    value = str(raw_side or "BOTH").upper()
+    if value.startswith("L"):
+        return "LEFT"
+    if value.startswith("R"):
+        return "RIGHT"
+    return "BOTH"
+
+
+def _side_factor(x, side, eps=0.0000001):
+    """従来の TEMP_LEFT/TEMP_RIGHT と同じ頂点ウェイトを返す。"""
+    if side == "LEFT":
+        if x > eps:
+            return 1.0
+        if -eps <= x <= eps:
+            return 0.5
+        return 0.0
+
+    if side == "RIGHT":
+        if x < -eps:
+            return 1.0
+        if -eps <= x <= eps:
+            return 0.5
+        return 0.0
+
+    return 1.0
+
+
+def _vertex_group_weights(obj, group_name):
+    """
+    Vertex Group のウェイトを頂点順の list として取得する。
+
+    ShapeKey.vertex_group が空、またはグループが存在しない場合は、
+    Blender の通常の無制限 ShapeKey と同様に全頂点 1.0 とする。
+    """
+    count = len(obj.data.vertices)
+    if not group_name:
+        return [1.0] * count
+
+    vg = obj.vertex_groups.get(group_name)
+    if vg is None:
+        return [1.0] * count
+
+    group_index = vg.index
+    weights = [0.0] * count
+
+    for vertex in obj.data.vertices:
+        for group_element in vertex.groups:
+            if group_element.group == group_index:
+                weights[vertex.index] = group_element.weight
+                break
+
+    return weights
+
+
+def _source_mask_weights(obj, source_key, side):
+    """
+    source 1個分の頂点マスクを返す。
+
+    LEFT/RIGHT:
+        旧実装が一時 VertexGroup を source_key.vertex_group に上書きしていた
+        挙動を直接再現する。そのため source_key 本来の vertex_group は使わない。
+
+    BOTH:
+        source_key に元から vertex_group がある場合はそのウェイトを尊重する。
+        旧 from_mix 実装で BOTH を指定したときの挙動に対応する。
+    """
+    if side in {"LEFT", "RIGHT"}:
+        return [_side_factor(v.co.x, side) for v in obj.data.vertices]
+
+    return _vertex_group_weights(obj, source_key.vertex_group)
+
+
+def _validate_relative_shape_keys(obj):
+    """直接合成が対象とする Relative ShapeKey かを検証する。"""
+    shape_keys = obj.data.shape_keys
+    if shape_keys is None:
+        return False
+
+    if not shape_keys.use_relative:
+        raise ValueError(
+            f"{obj.name}: YFX の sources 合成は Relative ShapeKey のみ対応しています。"
+        )
+
+    return True
+
+
+def _compose_shape_key_direct(obj, new_name, sources):
+    """
+    from_mix を使わずに sources を直接合成する。
+
+    Relative ShapeKey の実効変形量は
+        source.data - source.relative_key.data
+    なので、それを source weight と頂点マスクで加算する。
+
+    target 自身に custom relative_key が設定されている場合でも、
+    target の「実効 delta」が sources の合計になるよう、target.relative_key を
+    合成の基準座標として使用する。
+    """
+    _validate_relative_shape_keys(obj)
+
+    key_blocks = obj.data.shape_keys.key_blocks
+    vertex_count = len(obj.data.vertices)
+
+    # 先に source を解決・検証する。target 更新中に source を壊さないため、
+    # delta と mask は target への書き込み前にすべて snapshot する。
+    prepared_sources = []
+    for src in sources:
+        src_name = src["name"]
+        source_key = key_blocks.get(src_name)
+        if source_key is None:
+            print(
+                f"警告: {src_name} が存在しないため、{new_name} の作成をスキップします。"
+            )
+            return False
+
+        relative_key = source_key.relative_key
+        if relative_key is None:
+            raise ValueError(
+                f"{obj.name}: ShapeKey '{src_name}' の relative_key を取得できません。"
+            )
+
+        if len(source_key.data) != vertex_count or len(relative_key.data) != vertex_count:
+            raise ValueError(
+                f"{obj.name}: ShapeKey '{src_name}' の頂点数が Mesh と一致しません。"
+            )
+
+        weight = float(src.get("weight", 1.0))
+        side = _normalize_side(src.get("side", "BOTH"))
+        mask = _source_mask_weights(obj, source_key, side)
+
+        # mathutils.Vector の参照を保持せず copy() しておく。
+        # 後段で target が source/relative_key と関係していても安全にする。
+        deltas = [
+            source_key.data[i].co.copy() - relative_key.data[i].co.copy()
+            for i in range(vertex_count)
+        ]
+        prepared_sources.append((weight, mask, deltas))
+
+    target_key = _get_or_create_shape_key(obj, new_name)
+    target_relative = target_key.relative_key
+    if target_relative is None:
+        target_relative = obj.data.shape_keys.reference_key
+
+    if len(target_key.data) != vertex_count or len(target_relative.data) != vertex_count:
+        raise ValueError(
+            f"{obj.name}: ShapeKey '{new_name}' の頂点数が Mesh と一致しません。"
+        )
+
+    # target_relative 自身が後で書き換わるケースに備えて基準座標も snapshot。
+    base_coords = [target_relative.data[i].co.copy() for i in range(vertex_count)]
+
+    for i in range(vertex_count):
+        result = base_coords[i].copy()
+        for weight, mask, deltas in prepared_sources:
+            factor = weight * mask[i]
+            if factor != 0.0:
+                result += deltas[i] * factor
+        target_key.data[i].co = result
+
+    # 合成結果そのものには Vertex Group 制限を持たせない。
+    # 旧実装の New Shape from Mix で焼き込んだ結果と同じ考え方。
+    target_key.vertex_group = ""
+    target_key.value = 0.0
+    return True
+
+
 def create_deform_shape_key(target_obj, name, deform_info):
-    """頂点グループとベクトルに基づいて新しいシェイプキーを生成する"""
+    """頂点グループとベクトルに基づいて ShapeKey を直接生成・更新する。"""
+    _validate_relative_shape_keys(target_obj)
+
     vg_name = deform_info.get("target_group")
     vector = deform_info.get("vector", [0.0, 0.0, 0.0])
 
-    if vg_name not in target_obj.vertex_groups:
+    vg = target_obj.vertex_groups.get(vg_name) if vg_name else None
+    if vg is None:
         print(f"警告: 頂点グループ {vg_name} が見つかりません。")
-        return
+        return False
 
-    # ミックス用の新規シェイプキーを追加
-    new_key = target_obj.shape_key_add(name=name, from_mix=False)
-    vg_index = target_obj.vertex_groups[vg_name].index
+    if len(vector) != 3:
+        raise ValueError(
+            f"{target_obj.name}: deform.vector は3要素で指定してください: {vector}"
+        )
 
-    # 各頂点に対して移動を計算
-    # target_obj はすでにモディファイア適用済みの想定
-    for i, vert in enumerate(target_obj.data.vertices):
-        weight = 0.0
-        try:
-            # 頂点から該当グループのウェイトを取得
-            for g in vert.groups:
-                if g.group == vg_index:
-                    weight = g.weight
-                    break
-        except:
-            pass
+    target_key = _get_or_create_shape_key(target_obj, name)
+    relative_key = target_key.relative_key
+    if relative_key is None:
+        relative_key = target_obj.data.shape_keys.reference_key
 
-        if weight > 0:
-            # 相対座標をオフセット (vector は [x, y, z])
-            offset = [v * weight for v in vector]
-            # シェイプキーのデータ(data[i].co)は絶対座標
-            new_key.data[i].co[0] += offset[0]
-            new_key.data[i].co[1] += offset[1]
-            new_key.data[i].co[2] += offset[2]
+    vertex_count = len(target_obj.data.vertices)
+    if len(relative_key.data) != vertex_count:
+        raise ValueError(
+            f"{target_obj.name}: ShapeKey '{name}' の頂点数が Mesh と一致しません。"
+        )
+
+    weights = _vertex_group_weights(target_obj, vg_name)
+    offset_vector = tuple(float(v) for v in vector)
+
+    # 既存キー更新でも差分が累積しないよう、毎回 relative_key から作り直す。
+    for i in range(vertex_count):
+        co = relative_key.data[i].co.copy()
+        weight = weights[i]
+        if weight != 0.0:
+            co.x += offset_vector[0] * weight
+            co.y += offset_vector[1] * weight
+            co.z += offset_vector[2] * weight
+        target_key.data[i].co = co
+
+    target_key.vertex_group = ""
+    target_key.value = 0.0
+    return True
 
 
 def process_shape_key_blending(obj, blend_settings):
-    """JSONの設定に基づきシェイプキーを合成する"""
+    """
+    JSON の設定に基づき ShapeKey を合成する。
+
+    Blender の evaluated mix / depsgraph / shape_key_add(from_mix=True) には依存せず、
+    Relative ShapeKey の座標差分を直接計算する。
+    """
     if not obj.data.shape_keys:
         return
 
+    _validate_relative_shape_keys(obj)
     sorted_settings = sort_blend_settings(blend_settings)
 
-    # 1. すべての既存シェイプキーの値を一度 0 にリセット
+    # 旧実装と同じく export 時の ShapeKey 値は 0 に揃える。
+    # ただし、この値は合成計算には一切使用しない。
     for key in obj.data.shape_keys.key_blocks:
         key.value = 0.0
 
-    # 2. 合成設定を一つずつループ
     for blend_info in sorted_settings:
         new_name = blend_info["name"]
         sources = blend_info.get("sources", [])
-        deform = blend_info.get("deform", None)
+        deform = blend_info.get("deform")
 
         if sources:
-            # --- 追加: ソースの存在チェック ---
-            # 1つでも存在しないキーがあれば、この新規シェイプキー作成をスキップ
-            missing_source = False
-            for src in sources:
-                if src["name"] not in obj.data.shape_keys.key_blocks:
-                    print(
-                        f"警告: {src['name']} が存在しないため、{new_name} の作成をスキップします。",
-                    )
-                    missing_source = True
-                    break
-            if missing_source:
-                continue
-            # ------------------------------
-
-            # 各ソース（合成元）の値を設定
-            for src in sources:
-                src_name = src["name"]
-                weight = src.get("weight", 1.0)
-                raw_side = str(src.get("side", "BOTH")).upper()
-
-                # サイドの判定をファジーに (Lから始まればLEFT, RならRIGHT)
-                if raw_side.startswith("L"):
-                    determined_side = "LEFT"
-                elif raw_side.startswith("R"):
-                    determined_side = "RIGHT"
-                else:
-                    determined_side = "BOTH"
-
-                key_block = obj.data.shape_keys.key_blocks.get(src_name)
-
-                # 重みを設定
-                key_block.value = weight
-
-                # 左右分離の処理
-                if determined_side in ["LEFT", "RIGHT"]:
-                    temp_vg_name = create_temp_side_vertex_group(obj, determined_side)
-                    key_block.vertex_group = temp_vg_name
-
-            # --- 3. 新しいシェイプキーを作成、または既存のキーを更新 ---
-            existing_key_idx = obj.data.shape_keys.key_blocks.find(new_name)
-
-            if existing_key_idx == -1:
-                # 新規作成の場合：現在のミックス状態から新規キーを作成
-                _ = obj.shape_key_add(name=new_name, from_mix=True)
-            else:
-                # 既存更新の場合：現在のミックス状態から一時的なキーを作成
-                target_key = obj.data.shape_keys.key_blocks[existing_key_idx]
-                target_key.value = 1.0
-
-                temp_key = obj.shape_key_add(
-                    name="__YFX_temp_blend_result__",
-                    from_mix=True,
-                )
-
-                # 座標データをコピーして一時キーを削除
-                # 各頂点の相対座標(data[].co)をコピー
-                # ※頂点数が一致していることが前提
-                for i in range(len(temp_key.data)):
-                    target_key.data[i].co = temp_key.data[i].co
-
-                # 一時的なキーを削除
-                obj.shape_key_remove(temp_key)
-
-                target_key.value = 0.0
-
-            # 4. 次の合成のためにリセット
-            for src in sources:
-                kb = obj.data.shape_keys.key_blocks.get(src["name"])
-                if kb:
-                    kb.value = 0.0
-                    kb.vertex_group = ""
+            _compose_shape_key_direct(obj, new_name, sources)
 
         if deform:
             create_deform_shape_key(obj, new_name, deform)
 
-    # 一時的な頂点グループ（左右判定用）を削除
-    # cleanup_temp_vertex_groups(obj)
+    # FBX 出力直前も全 value を 0 に保証する。
+    # direct compose なので、ここで depsgraph update は不要。
+    for key in obj.data.shape_keys.key_blocks:
+        key.value = 0.0
 
 
 def create_temp_side_vertex_group(obj, side, eps=0.0000001):
-    """原点からの座標に基づき、左右どちらかのみに影響する一時的な頂点グループを作成"""
+    """
+    後方互換用。
+
+    direct compose では使用しないが、外部コードがこの関数を import している
+    可能性を考慮して残している。
+    """
     vg_name = f"TEMP_{side}"
     if vg_name in obj.vertex_groups:
         return vg_name
 
     vg = obj.vertex_groups.new(name=vg_name)
-
-    # 全頂点をループして、座標に応じてウェイトを割り当て
-    # LEFT: X > 0, RIGHT: X < 0 (Blenderの標準的な左右)
     for v in obj.data.vertices:
-        if (side == "LEFT" and v.co.x > eps) or (side == "RIGHT" and v.co.x < -eps):
-            vg.add([v.index], 1.0, "REPLACE")
-        elif (side == "LEFT" or side == "RIGHT") and -eps <= v.co.x <= eps:
-            vg.add([v.index], 0.5, "REPLACE")
+        factor = _side_factor(v.co.x, side, eps)
+        if factor != 0.0:
+            vg.add([v.index], factor, "REPLACE")
 
     return vg_name
 
 
 def cleanup_temp_vertex_groups(obj):
-    """一時的な頂点グループを削除"""
+    """旧方式で作成された一時的な頂点グループを削除する。"""
     for side in ["LEFT", "RIGHT"]:
         vg = obj.vertex_groups.get(f"TEMP_{side}")
         if vg:
             obj.vertex_groups.remove(vg)
-
 
 def sort_shapekey(obj: bpy.types.Object, shapekey_settings: bpy.types.AnyType) -> None:
     shapekeys = obj.data.shape_keys
